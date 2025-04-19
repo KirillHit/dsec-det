@@ -34,7 +34,7 @@ class DSECDet:
         sync='back'
         -------> time
         |.......
-               L
+        L
         
         """
         assert root.exists()
@@ -103,8 +103,7 @@ class DSECDet:
 
     def get_tracks(self, index, mask=None, directory_name=None):
         index, img_idx_to_track_idx, directory = self.rel_index(index, directory_name)
-        i_0, i_1 = self.get_index_window(index, len(img_idx_to_track_idx), sync=self.sync)
-        idx0, idx1 = img_idx_to_track_idx[i_0]
+        idx0, idx1 = img_idx_to_track_idx[index]
         tracks = directory.tracks.tracks[idx0:idx1]
 
         if mask is not None:
