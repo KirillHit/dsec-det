@@ -1,6 +1,7 @@
 from pathlib import Path 
 import cv2
 import numpy as np
+import torch
 from dsec_det.directory import DSECDirectory
 
 from dsec_det.preprocessing import compute_img_idx_to_track_idx, interpolate_tracks, interpolate_tracks_series
@@ -63,7 +64,11 @@ class DSECDet:
         assert root.exists()
         assert split in ['train', 'test', 'val']
         #assert (root / split).exists()
-        assert sync in ['front', 'back']
+        assert sync in ['front', 'back', 'back_and_front'], f"unknown sync mode '{sync}'"
+
+        if sync == 'back_and_front':
+            assert interpolate_labels, "'back_and_front' requires interpolate_labels=True"
+
 
         self.debug = debug
         self.classes = CLASSES
@@ -131,6 +136,11 @@ class DSECDet:
     def __getitem__(self, item):
         output = {}
         output['image'] = self.get_image(item)
+        if self.sync == 'back_and_front':
+            # idx_local is guaranteed < len(front_files)-1 because
+            # __len__() exposes only N-1 windows per subsequence.
+            output['image_front'] = self.get_image(item + 1)
+
         output['events'] = self.get_events(item)
         output['tracks'] = self.get_tracks(item)
 
