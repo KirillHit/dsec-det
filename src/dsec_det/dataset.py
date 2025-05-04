@@ -60,14 +60,24 @@ class DSECDet:
         |.......
         L
 
+        sync='back_and_front'
+        -------> time
+        |......|
+        LLLLLLLL
+
+        sync='back_w_warmup'
+        -------> time
+        |......|......
+        LLLLLLLLLLLLLL
+
         """
         assert root.exists()
         assert split in ['train', 'test', 'val']
         #assert (root / split).exists()
-        assert sync in ['front', 'back', 'back_and_front'], f"unknown sync mode '{sync}'"
+        assert sync in ['front', 'back', 'back_and_front', 'back_w_warmup'], f"unknown sync mode '{sync}'"
 
-        if sync == 'back_and_front':
-            assert interpolate_labels, "'back_and_front' requires interpolate_labels=True"
+        if sync in ('back_and_front', 'back_w_warmup'):
+            assert interpolate_labels, f"'{sync}' requires interpolate_labels=True"
 
 
         self.debug = debug
@@ -99,6 +109,13 @@ class DSECDet:
             self.directories[f.name] = directory
             self.img_idx_track_idxs[f.name] = compute_img_idx_to_track_idx(directory.tracks.tracks['t'],
                                                                            directory.images.timestamps)
+
+
+    def _events_between(self, directory, idx_a, idx_b):
+        """all events in [idx_a , idx_b]  (idx_b > idx_a)"""
+        t0, t1 = directory.images.timestamps[[idx_a, idx_b]]
+        return extract_from_h5_by_timewindow(directory.events.event_file, t0, t1)
+
 
     def first_time_from_subsequence(self, subsequence):
         return np.genfromtxt(subsequence / "images/timestamps.txt", dtype="int64")[0]
@@ -136,13 +153,34 @@ class DSECDet:
     def __getitem__(self, item):
         output = {}
         output['image'] = self.get_image(item)
+        output['events'] = self.get_events(item)
+        output['tracks'] = self.get_tracks(item)
+
         if self.sync == 'back_and_front':
             # idx_local is guaranteed < len(front_files)-1 because
             # __len__() exposes only N-1 windows per subsequence.
             output['image_front'] = self.get_image(item + 1)
 
-        output['events'] = self.get_events(item)
-        output['tracks'] = self.get_tracks(item)
+        elif self.sync == 'back_w_warmup':
+            idx_loc, img2trk, directory = self.rel_index(item)  # resolve directory & local index exactly once
+            if idx_loc == 0:  # subsequence starts here
+                  # degenerate warm-up: duplicate current frame, events
+                        output['image_warm_up'] = output['image']
+                        output['events_warm_up'] = output['events']
+                        output['tracks_warm_up'] = output['tracks'] \
+                                                     if 'tracks' in output else None
+            else:
+            # events & labels between previous and current image
+                        output['image_warm_up'] = cv2.imread(
+                                str(directory.images.image_files_distorted[idx_loc - 1])
+            )
+                        output['events_warm_up'] = self._events_between(
+                                directory, idx_loc - 1, idx_loc
+                                            )
+                        output['tracks_warm_up'] = self._build_interpolated_tracks(
+                                directory, idx_loc - 1, idx_loc
+                                            )
+
 
         if self.debug:
             # visualize tracks and events
