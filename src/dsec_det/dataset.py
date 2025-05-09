@@ -58,7 +58,7 @@ class DSECDet:
         sync='back'
         -------> time
         |.......
-               L
+        L
 
         sync='back_and_front'
         -------> time
@@ -208,8 +208,6 @@ class DSECDet:
 
     def get_tracks(self, index, mask=None, directory_name=None):
         index, img_idx_to_track_idx, directory = self.rel_index(index, directory_name)
-        if self.sync == "back":
-            index = np.clip(index + 1, 0, len(img_idx_to_track_idx) - 1)
         idx0, idx1 = img_idx_to_track_idx[index]
         tracks_main = directory.tracks.tracks[idx0:idx1]
 
